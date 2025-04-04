@@ -1,0 +1,75 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, roc_auc_score, roc_curve, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load your morphometric dataset (CSV file should have columns like 'Dd', 'Fs', 'Rh', 'Rbm', 'If', 'Label')
+df = pd.read_csv('morphometric_ml_dataset.csv')
+
+# Feature and target separation
+features = ['Dd', 'Fs', 'Rh', 'Rbm', 'If']
+X = df[features]
+y = df['Label']  # 0 = Not Flood-Prone, 1 = Flood-Prone
+
+# Split the data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Define models
+rf = RandomForestClassifier(random_state=42)
+svm = SVC(probability=True, kernel='rbf', random_state=42)
+xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+
+# Train models
+rf.fit(X_train, y_train)
+svm.fit(X_train, y_train)
+xgb.fit(X_train, y_train)
+
+# Predict probabilities
+probs_rf = rf.predict_proba(X_test)[:, 1]
+probs_svm = svm.predict_proba(X_test)[:, 1]
+probs_xgb = xgb.predict_proba(X_test)[:, 1]
+
+# Evaluate and print AUC
+print("Random Forest AUC:", roc_auc_score(y_test, probs_rf))
+print("SVM AUC:", roc_auc_score(y_test, probs_svm))
+print("XGBoost AUC:", roc_auc_score(y_test, probs_xgb))
+
+# Plot ROC curves
+plt.figure(figsize=(8, 6))
+for model_name, y_score in zip(['RF', 'SVM', 'XGB'], [probs_rf, probs_svm, probs_xgb]):
+    fpr, tpr, _ = roc_curve(y_test, y_score)
+    auc_val = roc_auc_score(y_test, y_score)
+    plt.plot(fpr, tpr, label=f'{model_name} (AUC={auc_val:.2f})')
+
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve Comparison')
+plt.legend()
+plt.tight_layout()
+plt.savefig('ROC_Comparison.png')
+
+# Confusion matrix for XGBoost
+y_pred = xgb.predict(X_test)
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion Matrix - XGBoost')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.tight_layout()
+plt.savefig('XGBoost_Confusion_Matrix.png')
+
+# Feature importance plot (XGBoost)
+importance = xgb.feature_importances_
+plt.figure(figsize=(8, 5))
+sns.barplot(x=importance, y=features)
+plt.title("XGBoost Feature Importances")
+plt.tight_layout()
+plt.savefig("XGBoost_Feature_Importance.png")
